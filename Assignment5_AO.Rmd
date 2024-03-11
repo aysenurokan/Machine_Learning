@@ -1,0 +1,179 @@
+---
+title: "Assignment 5 -- kNN and Support Vector Machines"
+author: "Aysenur Okan"
+date: "2024-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(car)
+library(caret)
+library(kernlab)
+library(e1071)
+library(party)
+library(tidyverse)
+library(dplyr)
+
+setwd("/Users/aysenur/Desktop/PSYC834 - Machine Learning")
+
+df <- read_csv("df_all_AO.csv")
+
+df <- df %>% dplyr::select(id, UPPS_negurg,  prev_PE, prev_vdiff, switch_choice) #we could do dummy coding for categorical variables but I chose to remove them. 
+df$switch_choice <- factor(df$switch_choice, levels = c(0, 1), labels = c("No", "Yes"))
+#df$BPD_fac <- factor(df$BPD_fac)
+
+
+#Split data into training and testing
+set.seed(150) # Set a seed for reproducibility
+index <- createDataPartition(df$switch_choice, p = 0.3, list = FALSE) # Create an index for splitting the data; use 70% for training and 30% for testing
+
+# Create training and testing datasets
+df <- df[index, ] #training data
+tsdf <- df[-index, ] #testing data
+
+#missing values are not allowed
+df <- na.omit(df)
+tsdf <- na.omit(tsdf)
+df <- as.data.frame(df)
+tsdf <- as.data.frame(tsdf)
+
+#Caret Setup for all analyses
+ctrl <- trainControl(method = "CV", number=5,classProbs=TRUE)
+set.seed(202)
+
+```
+
+# K-nearest neighbors
+
+For kNN, the tuning parameter is the number of neighbors considered in each step. In this case, we use tuneLength = 10 to evaluate ten different values of neighbors. The best value will be determined via five-fold cross-validation.
+
+```{r}
+set.seed(202)
+knn_f <- train(switch_choice ~ ., data=df,
+               method = "knn",
+               metric = "Accuracy",
+               preProc = c("center", "scale"),
+               tuneLength = 15,
+               trControl = ctrl)
+knn_f #summary information
+
+plot(knn_f) # plot # neighbors vs accuracy
+
+knnf=knn_f$finalModel #save final model
+```
+
+
+
+
+#Support Vector Machines
+
+The code for three SVM’s is shown below. First, we show code for the SVM with a Linear Kernel (aka the support vector classifier). Then, we show code for the SVM with a Radial Kernel (aka the Gaussian Kernel or Radial Basis Function [RBF] Kernel). Finally, we show code for the Polynomial kernel. Note that there are different tuning parameters across the kernels.
+
+## SVM with Linear Kernel
+The main tuning parameter for SVM with a linear kernel is C, which is the “budget” we have for misclassifi- cations across the classification boundary. We specify several values of C in a grid so that caret can evaluate them. Note that the best SVM model will be chosen based on Accuracy, and that the method is svmLinear.
+
+```{r}
+# Define your grid of C values
+grid <- expand.grid(C = 2^(seq(-6, 6)))
+
+# Set the seed for reproducibility
+set.seed(202)
+
+# Define trainControl object for cross-validation
+ctrl <- trainControl(method = "cv", number = 10, search = "grid") #The search = "grid" option ensures that the tuning process uses the grid you've specified.
+
+# Train the model
+svmLModel <- train(switch_choice ~ ., data = df, #specifying switch_choice as the response variable and all other columns in df as predictors. 
+                   method = "svmLinear",
+                   metric = "Accuracy",
+                   preProc = c("center", "scale"), # Standardizes predictors
+                   tuneGrid = grid,
+                   trControl = ctrl)
+
+# Display the model
+print(svmLModel)
+
+# Plot the model
+plot(svmLModel)
+```
+
+## SVM with Radial Kernel
+The main tuning parameters for SVM with a radial kernel is, again, C, and sigma, which is the dispersion parameter (noted as gamma in the lecture). The kernlab R-package, which caret calls to estimate the SVM, has a function used to get estimated sigma values that might work well. We specify several values for sigma and C in a grid so that caret can evaluate them during the cross-validation procedure. Note that the best SVM model will be chosen based on Accuracy, and that the method is svmRadial.
+
+```{r}
+# SVM with Radial Kernel
+sigmaRangeReduced <- round(sigest(switch_choice ~ ., data = df), 3)
+svmRModel <- train(switch_choice ~ ., data = df,
+                   method = "svmRadial",
+                   metric = "Accuracy",
+                   preProc = c("center", "scale"), # Standardizes predictors
+                   tuneGrid = svmRGridReduced,
+                   trControl = ctrl)
+svmRModel #obtain final results
+plot(svmRModel)
+svm_r=svmRModel$finalModel #save final models
+
+```
+
+
+## SVM with Polynomial Kernel
+
+The main tuning parameters for SVM with a polynomial kernel is, again, C, the degree of the polynomial, and a scale value. We specify several values for the degree, scale, and C in a grid so that caret can evaluate them during the cross-validation procedure. Note that the best SVM model will be chosen based on Accuracy and that the method is svmPoly.
+
+```{r}
+#SVM with Polynomial Kernel
+ grid <- expand.grid(C = 2^(seq(-2, 2)), degree = 1:2, scale = 1)
+set.seed(202)
+svmPModel <- train(switch_choice ~ ., data = df,
+                   method = "svmPoly",
+                   metric = "Accuracy",
+                   preProc = c("center", "scale"),
+                   tuneGrid = grid,
+                   trControl = ctrl)
+svmPModel
+plot(svmPModel)
+svm_p=svmPModel$finalModel
+```
+
+
+## Obtaining Predicted values
+
+Finally, we use the final models to obtain predicted values, estimate the confusion matrices. Note that predictors have to be standardized before using the predict function for the support vector machine approaches - if not, the model would predict constants.
+
+```{r}
+#SVM Radial
+
+svmradial=predict(svm_r,newdata=scale(tsdf[, -5]))
+svmradial <- as.data.frame(svmradial)
+svmradial <- svmradial %>% rename("predicted" = svmradial)
+a <- cbind(svmradial, tsdf$switch_choice) 
+a<- a %>% rename ("Actual" =  `tsdf$switch_choice`)
+```
+
+
+#Make ROC -- failed. 
+```{r}
+install.packages("pROC")
+library(pROC)
+data  <- confusionMatrix(confusionMatrix)
+roc_obj <- roc(response = confusionMatrix$Actual, predictor = confusionMatrix$predicted)
+
+confMatrix <- confusionMatrix(a$predicted, a$Actual)
+sensitivity <- confMatrix$byClass['Sensitivity']
+specificity <- confMatrix$byClass['Specificity']
+
+library(ggplot2)
+
+# Plotting the single point
+ggplot(data = data.frame(Specificity = 1-specificity, Sensitivity = sensitivity), aes(x = Specificity, y = Sensitivity)) +
+  geom_point() +
+  xlim(c(0, 1)) + ylim(c(0, 1)) +
+  xlab("1 - Specificity (False Positive Rate)") +
+  ylab("Sensitivity (True Positive Rate)") +
+  ggtitle("ROC-like Plot for Binary Predictions") +
+  theme_minimal()
+
+# This plots a single point, not a curve, representing your classifier's performance at the implicit threshold used for binary prediction.
+
+```

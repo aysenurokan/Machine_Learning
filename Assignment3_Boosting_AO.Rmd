@@ -1,0 +1,89 @@
+---
+title: "Assignment 3 - Boosting"
+author: "Aysenur Okan"
+date: "2024-02-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(rpart)
+library(rpart.plot)
+#install.packages("partykit")
+library(partykit)
+#install.packages("caret")
+library(caret)
+library(e1071)
+library(party)
+install.packages("randomForest")
+library(randomForest)
+library(readr)
+#library(tidyverse)
+install.packages("gbm")
+install.packages("pROC")
+install.packages("pdp")
+install.packages("rpart.plot")
+#library(gbm)
+library(pROC)
+library(pdp)
+install.packages("devtools")
+library("devtools")
+install_github("gbm-developers/gbm3")
+library(gbm3)
+
+
+#setwd("/Users/aysenur/Desktop/PSYC834 - Machine Learning")
+setwd("/proj/mnhallqlab/users/aysenur/Machine Learning")
+
+df <- read_csv("df_all_AO.csv")
+
+df <- df %>% dplyr::select(id, BPD_fac, UPPS_negurg, avg_bilateral_BLA_CeN_EC, vmPFC_l_CeN_l_EC_SC, prev_PE, prev_rewarded, prev_vdiff, switch_choice)
+df$switch_choice <- factor(df$switch_choice)
+df$BPD_fac <- factor(df$BPD_fac)
+
+#Split data into training and testing
+set.seed(150) # Set a seed for reproducibility
+index <- createDataPartition(df$switch_choice, p = 0.5, list = FALSE) # Create an index for splitting the data; use 50% for training and 50% for testing
+
+# Create training and testing datasets
+df <- df[index, ] #training data
+tsdf <- df[-index, ] #testing data
+
+#missing values are not allowed
+df <- na.omit(df)
+tsdf <- na.omit(tsdf)
+df <- as.data.frame(df)
+tsdf <- as.data.frame(tsdf) #note there was a typo here and I saved tsdf as df so that might be why there was no difference when I ran the models -- oops. Realized it after submitting the assignment and didn't run the models again, but just keep that in mind if you come back to this. 
+```
+
+
+
+
+# Boosting with gbm()
+
+```{r}
+ #boosting model
+#We specify that the distribution is “bernoulli” because our outcome only takes two values: 0 or 1. There were 10000 trees sequentially grown on the negative gradients of pf, and the trees have an interaction depth of 2, so each tree has two splits/three leaves. 
+boost1=gbm(switch_choice~.-id, data=df, n.trees=10000,interaction.depth = 2,shrinkage = .001, bag.fraction = .5,distribution='bernoulli',cv.folds = 3)
+
+#getting variable importance measures
+summary(boost1) 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

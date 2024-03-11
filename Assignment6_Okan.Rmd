@@ -1,0 +1,61 @@
+---
+title: "Assignment6_Okan"
+author: "Aysenur Okan"
+date: "2024-03-05"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dplyr)
+install.packages('leaps')
+library(leaps)
+
+
+setwd("/Users/aysenur/Desktop/PSYC834 - Machine Learning")
+
+tedf <- read_csv("tedata.csv")
+trdf <- read_csv("trdata.csv")
+```
+
+
+# Regression
+
+```{r}
+reg1 <-  lm(Rating ~ ., trdf)
+summary(reg1)
+
+pr1 <- predict(reg1,newdata=tedf)
+mse1 <- mean((tedf$Rating-pr1)ˆ2 #Mean square error
+r2 <- cor(tedf$Rating, pr1)ˆ2 #Variance explained
+mse1
+re2
+```
+
+
+# Forward Selection in Regression
+
+```{r}
+forwardreg <-  regsubsets(Rating~.,data=trdf,nvmax=6,method='forward')
+(forwardreg_summary <- summary(forwardreg))
+plot(forwardreg_summary$bic,type='l', xlab='number of predictors',ylab='BIC') #plot relationship between BIC and # of predictors
+which(forwardreg_summary$bic == min(forwardreg_summary$bic))
+coef(forwardreg,2) #final coefficients
+```
+
+
+# Regularized Regression
+
+```{r}
+
+
+```
+
+
+
+
+
+
+
