@@ -2,19 +2,26 @@
 title: "Assignment6_Okan"
 author: "Aysenur Okan"
 date: "2024-03-05"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r}
 knitr::opts_chunk$set(echo = TRUE)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+install.packages("leaps")
 
 library(tidyverse)
 library(dplyr)
 install.packages('leaps')
 library(leaps)
+library(glmnet) #for regularization
+library(caret) #tuning the elastic net
+library(Matrix)
 
 
-setwd("/Users/aysenur/Desktop/PSYC834 - Machine Learning")
+setwd("/Users/aysenur/Documents/GitHub/Machine_Learning")
 
 tedf <- read_csv("tedata.csv")
 trdf <- read_csv("trdata.csv")
@@ -28,10 +35,10 @@ reg1 <-  lm(Rating ~ ., trdf)
 summary(reg1)
 
 pr1 <- predict(reg1,newdata=tedf)
-mse1 <- mean((tedf$Rating-pr1)ˆ2 #Mean square error
-r2 <- cor(tedf$Rating, pr1)ˆ2 #Variance explained
+mse1 <- mean(tedf$Rating-pr1)^2 #Mean square error
+r2 <- cor(tedf$Rating, pr1)^2 #Variance explained
 mse1
-re2
+r2
 ```
 
 
@@ -48,13 +55,97 @@ coef(forwardreg,2) #final coefficients
 
 # Regularized Regression
 
-```{r}
 
+Lambda is the regularization parameter that controls the amount of shrinkage applied to the coefficients. In glmnet, as lambda increases, more coefficients are pushed towards zero, leading to simpler models. A very high value of lambda can lead to underfitting, while a very low value can lead to overfitting.
+Alpha parameter balances the type of regularization applied between L1 (Lasso, alpha = 1) and L2 (Ridge, alpha = 0). An elastic net regularization is a combination of both, and by adjusting alpha, you can control the mix of L1 and L2 regularization. An alpha close to 1 puts more emphasis on Lasso, promoting sparsity (more coefficients set to exactly zero), while an alpha closer to 0 favors Ridge, which tends to distribute the penalty among more coefficients. I use an elastic net, which combines both approaches. 
+
+
+```{r}
+set.seed(202)
+
+# Prepare the training data
+x2 <- model.matrix(~., data=trdf[, -which(names(trdf) == "Rating")])  # Remove Rating column for predictors
+y <- trdf$Rating  # Response vector
+
+# Standardize the predictors (note: glmnet will do this by default, but doing manually for clarity)
+x2 <- scale(x2)
+x2 <- x2[,-1] #delete the intercept
+# For test data (only if needed for prediction or validation later)
+# I want to standardize using training data means and sd, which is why I'm not doing it here directly.
+# x4 and y2 are prepared but not used in cv.glmnet below. They could be used for prediction after model selection.
+x4 <- model.matrix(~., data=tedf[, -which(names(tedf) == "Rating")])
+y2 <- tedf$Rating
+x4 <- x4[,-1]
+
+
+# 10-fold cross-validation for tuning parameter lambda with Elastic Net
+i33 <- cv.glmnet(x = x2, y = y, alpha = 0.5)  # alpha = 0.5 for elastic net
+
+# Plot the result
+plot(i33)
+
+# Extract the lambda value that gives the minimum mean cross-validated error
+lambda_min <- i33$lambda.min
+print(lambda_min)
+
+# Extract the lambda value at which the cross-validated error is within 1 standard error of the minimum
+lambda_1se <- i33$lambda.1se
+print(lambda_1se)
+
+# Coefficients at lambda.1se
+coef_1se <- coef(i33, s = "lambda.1se")
+print(coef_1se)
+
+```
+
+
+```{r}
+# Predict on test data using the lambda.1se from the cross-validation
+pelnet = predict(i33, newx = x4, s = "lambda.1se")
+# Calculate the Mean Squared Error (MSE) between the predictions and actual values
+mseelnet = mean((pelnet - y2) ^ 2)
+print(mseelnet)
+
+# Calculate the R-squared value
+r2elnet = cor(pelnet, y2) ^ 2
+print(r2elnet)
 
 ```
 
 
 
+# Tuning the Elastic Net 
+
+
+Performance metric (e.g., RMSE for regression tasks) on the y-axis and the log of lambda on the x-axis. Each line represents a different alpha value if the training explored multiple alphas. For each curve, the point with the lowest metric (highest accuracy or lowest RMSE/error) indicates the best-performing lambda value for that alpha. The optimal alpha is the one that results in the best (lowest) cross-validated performance metric.
+
+By observing how the performance metric changes with lambda, I can gauge the sensitivity of your model to regularization. A steep curve suggests that regularization has a significant impact, potentially indicating a model that's very sensitive to overfitting without regularization.
+
+
+```{r}
+# Set up control for cross-validation
+ctrl1 <- trainControl(method = 'cv', number = 5)
+# Train the glmnet model
+trglmnet <- train(x = x2, y = y, method = "glmnet", trControl = ctrl1)
+
+# Plot the training result
+plot(trglmnet)
+
+# Retrain the model with the best-tuned parameters on the full training set
+gl1 <- glmnet(x = x2, y = y, alpha = trglmnet$bestTune$alpha, lambda = trglmnet$bestTune$lambda)
+
+# Display coefficients of the tuned model
+coef(gl1)
+
+# Predict on test data using the tuned model parameters
+elnet_tuned <- predict(gl1, newx = x4, s = trglmnet$bestTune$lambda)
+
+# Calculate the Mean Squared Error (MSE) for the tuned model
+(msetunedelnet <- mean((elnet_tuned - y2) ^ 2))
+
+# Calculate the R-squared value for the tuned model
+(r2tunedelnet <- cor(elnet_tuned, y2) ^ 2)
+```
 
 
 
