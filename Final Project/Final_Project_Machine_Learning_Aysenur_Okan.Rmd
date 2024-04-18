@@ -46,10 +46,16 @@ index <- createDataPartition(df$SI_Binary, p = 0.5, list = FALSE) # Create an in
 df <- df[index, ] #training data
 tsdf <- df[-index, ] #testing data
 
+
+# Define tuning routine with caret
+trctrl=trainControl(method='cv',number=5) #k-fold cross-validation to determine the tuning parameters.
 ```
 
 
-# Fit decision tree using rpart
+
+# Decision Trees
+
+## Fit decision tree using rpart
 
 The biggest predictors of suicidal ideation were feeling sad during the interaction (>3) and Negative Affectivity (>2.3). Then, I got the complexity parameter to see if my model overfit the data and could improve by pruning. The complexity parameter was very small (cp = 0.011), indicating that the model did not suffer from complexity.
 
@@ -100,12 +106,13 @@ miss.rpartp
 ```
 
 
+# Ensemble Methods
 
 
-# Bagging with `randomForest()`
+## Bagging with `randomForest()`
 
 ```{r}
-bag1=randomForest(SI_Binary~.-id,data=df,mtry=7,ntree=500) #bagging model; `mtry` function argument controls the number of predictors considered every time the tree makes a split. If the `mtry` values equals the number of predictors, then the randomForest function does bagging.
+bag1=randomForest(SI_Binary~.-id,data=df,mtry=23,ntree=800) #bagging model; `mtry` function argument controls the number of predictors considered every time the tree makes a split. If the `mtry` values equals the number of predictors, then the randomForest function does bagging.
 
 bagpred=predict(bag1,tsdf,type='response') #obtain predicted values from testing dataset 
 bag.table=table(bagpred,tsdf$SI_Binary) #cross-tabulation (rows are predicted, columns are observed 
@@ -115,19 +122,13 @@ bag.table
 varImpPlot(bag1) #plot variable importance measures
 ```
 
-##Tuning the tree with caret
-
-```{r}
-trctrl=trainControl(method='cv',number=5) #k-fold cross-validation to determine the tuning parameters.
-```
 
 
-
-# Random Forest
+## Random Forest
 
 ```{r}
 # Predicting SI_Binary with random forest on the training dataset
-rf=randomForest(SI_Binary~.-id,data=df,mtry=3,ntree=400) #use 3 vars at a time (3 random predictors as candidates to split on), 400 trees grown in bootstrapped datasets. 
+rf=randomForest(SI_Binary~.-id,data=df,mtry=7,ntree=800) #use 7 vars at a time (7 random predictors as candidates to split on), 400 trees grown in bootstrapped datasets. 
 #obtain the predicted values in the testing dataset
 rfpred=predict(rf,tsdf,type='response')
 # cross-tabulation of the classes
@@ -141,8 +142,7 @@ varImpPlot(rf)
 
 
 
-
-## Grow a random forest with randomForest() to predict SI_Binary, and try 5 tuning parameters and the previously-specified cross-validation routine.
+### try 5 tuning parameters and the previously-specified cross-validation routine.
 ```{r}
 set.seed(2000)
 #Fit Model 
@@ -157,7 +157,39 @@ varImpPlot(final.rf)
 
 
 
-## The random forest algorithm with conditional inference from cforest()
+### Fit the random forest with mtry = 9
+
+```{r}
+# Predicting SI_Binary with random forest on the training dataset
+rf=randomForest(SI_Binary~.-id,data=df,mtry=9,ntree=800) #use 7 vars at a time (7 random predictors as candidates to split on), 400 trees grown in bootstrapped datasets. 
+#obtain the predicted values in the testing dataset
+rfpred=predict(rf,tsdf,type='response')
+# cross-tabulation of the classes
+rf.table=table(rfpred,tsdf$SI_Binary)
+#the variable importance measures.
+rf.table
+1-(mean(rfpred==tsdf$SI_Binary))
+varImpPlot(rf)
+```
+
+
+### Fit the random forest with mtry = 9 and add ID as a cluster variable
+
+```{r}
+# Predicting SI_Binary with random forest on the training dataset
+rf=randomForest(SI_Binary~.,data=df,mtry=9,ntree=800) #use 7 vars at a time (7 random predictors as candidates to split on), 400 trees grown in bootstrapped datasets. 
+#obtain the predicted values in the testing dataset
+rfpred=predict(rf,tsdf,type='response')
+# cross-tabulation of the classes
+rf.table=table(rfpred,tsdf$SI_Binary)
+#the variable importance measures.
+rf.table
+1-(mean(rfpred==tsdf$SI_Binary))
+varImpPlot(rf)
+```
+
+
+# Conditional Inference Random Forest with cforest()
 
 ```{r}
 df[] <- lapply(df, function(x) if(is.character(x)) factor(x) else x)
@@ -173,7 +205,7 @@ df <- df %>% filter(race != "American Indian")
 df$race <- factor(as.character(df$race, levels = "African American", "Asian","Pacific Islander" ,"White"))
 tsdf$race <- factor(as.character(tsdf$race, levels = "African American", "Asian","Pacific Islander" ,"White"))
 df[] <- lapply(df, function(x) if(is.character(x)) factor(x) else x)
-crf1 <- cforest(SI_Binary ~ ., data = df, controls = cforest_unbiased(ntree = 400, mtry = 3))
+crf1 <- cforest(SI_Binary ~ ., data = df, controls = cforest_unbiased(ntree = 800, mtry = 9))
 crfpred <- predict(crf1, newdata = tsdf, type = "response")
 
 crf.table=table(crfpred,tsdf$SI_Binary)
@@ -185,10 +217,8 @@ dotchart(sort(vi,decreasing=FALSE))
 
 
 
+## Tuning the Conditional Inference Random Forest
 
-
-
-# Conditional Inference Random Forest
 
 ```{r}
 #Fit model for conditional inference random forest
@@ -204,15 +234,19 @@ names(vi)=rownames(varImp(final.crf))
 dotchart(sort(vi,decreasing=FALSE))
 ```
 
-## Tuning
-```{r}
-set.seed(2000)
-#Fit Model 
-train.crf=train(SI_Binary~.,data=df,method='cforest',tuneLength=5,trControl=trctrl) 
-#See tuning parameters
-train.crf
-plot(train.crf)
 
-final.crf=train.crf$finalModel
-varImpPlot(final.crf)
+### mtry = 24 conditional inference random forest
+
+```{r}
+crf1 <- cforest(SI_Binary ~ ., data = df, controls = cforest_unbiased(ntree = 800, mtry = 24))
+crfpred <- predict(crf1, newdata = tsdf, type = "response")
+
+crf.table=table(crfpred,tsdf$SI_Binary)
+crf.table
+1-(mean(crfpred==tsdf$SI_Binary))
+vi=varimp(crf1)
+dotchart(sort(vi,decreasing=FALSE))
+
 ```
+
+
