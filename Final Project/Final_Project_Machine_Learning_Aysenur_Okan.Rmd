@@ -173,7 +173,7 @@ varImpPlot(rf)
 ```
 
 
-### Fit the random forest with mtry = 9 and add ID as a cluster variable
+### Fit the random forest with mtry = 9 and add ID as a cluster variable (note: I used ID as a numeric variable, which is wrong. It should be a factor)
 
 ```{r}
 # Predicting SI_Binary with random forest on the training dataset
